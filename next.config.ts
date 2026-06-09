@@ -67,7 +67,8 @@ const nextConfig: NextConfig = {
    *   did nothing because the cache is server-side.
    *
    * Strategy:
-   *   - /_next/static/* — immutable for a year. Filenames are
+   *   - /_next/static/* — immutable for a year (production only;
+   *     Next.js manages these in development). Filenames are
    *     content-hashed, so a new build produces new filenames; the
    *     old ones are safe to keep indefinitely in caches.
    *   - /api/*          — no-store. API responses are per-user and
@@ -83,7 +84,7 @@ const nextConfig: NextConfig = {
    *   /broadcasts, etc.) are server-rendered per request — Next.js
    *   and Supabase auth already prevent them from being served
    *   from a shared cache. The s-maxage here is a ceiling; Next.js
-   *   and auth middleware still set `private` / `no-store` for
+   *   and auth proxy still set `private` / `no-store` for
    *   per-user responses.
    *
    * Security headers are appended via a separate catch-all rule
@@ -92,16 +93,21 @@ const nextConfig: NextConfig = {
    * matched.
    */
   async headers() {
+    const isDev = process.env.NODE_ENV === "development";
     return [
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
+      ...(isDev
+        ? []
+        : [
+            {
+              source: "/_next/static/:path*",
+              headers: [
+                {
+                  key: "Cache-Control",
+                  value: "public, max-age=31536000, immutable",
+                },
+              ],
+            },
+          ]),
       {
         source: "/api/:path*",
         headers: [{ key: "Cache-Control", value: "no-store" }],
@@ -117,9 +123,6 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Security headers on every response, including /_next/static
-        // assets (nosniff matters there) and /api/* (HSTS + referrer-
-        // policy don't hurt).
         source: "/:path*",
         headers: [...SECURITY_HEADERS],
       },
